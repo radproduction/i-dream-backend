@@ -677,6 +677,21 @@ export async function getUserProjects(userId: string) {
     .filter(Boolean);
 }
 
+export async function getProjectsForEmployee(userId: string) {
+  if (!(await optionalDb())) return [];
+  const assignments = await ProjectAssignment.find({ userId: toObjectId(userId) })
+    .populate("projectId")
+    .lean();
+
+  return assignments
+    .map((assignment: any) => {
+      if (!assignment.projectId) return undefined;
+      const project = assignment.projectId as any;
+      return normalizeDoc({ ...project, role: assignment.role });
+    })
+    .filter(Boolean);
+}
+
 export async function getProjectTasks(projectId: string, userId: string) {
   if (!(await optionalDb())) return [];
   const userObjectId = toObjectId(userId);
@@ -698,6 +713,61 @@ export async function getProjectTasks(projectId: string, userId: string) {
     ],
   }).lean();
   return normalizeDocs(tasks);
+}
+
+export async function getAllProjectTasks(projectId: string) {
+  if (!(await optionalDb())) return [];
+  const tasks = await ProjectTask.find({ projectId: toObjectId(projectId) })
+    .sort({ createdAt: -1 })
+    .populate("assigneeIds")
+    .populate("userId")
+    .lean();
+
+  return tasks.map((task: any) => {
+    const assignees =
+      Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0
+        ? task.assigneeIds
+        : task.userId
+          ? [task.userId]
+          : [];
+    return {
+      ...normalizeDoc(task),
+      assignees: assignees.map((u: any) => normalizeDoc(u as any)).filter(Boolean),
+    };
+  });
+}
+
+export async function getTasksByEmployee(userId: string) {
+  if (!(await optionalDb())) return [];
+  const userObjectId = toObjectId(userId);
+  const tasks = await ProjectTask.find({
+    $or: [
+      { assigneeIds: userObjectId },
+      {
+        $and: [
+          {
+            $or: [
+              { assigneeIds: { $exists: false } },
+              { assigneeIds: { $size: 0 } },
+            ],
+          },
+          { userId: userObjectId },
+        ],
+      },
+    ],
+  })
+    .populate("projectId")
+    .populate("assigneeIds")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return tasks.map((task: any) => ({
+    ...normalizeDoc(task),
+    project: task.projectId ? normalizeDoc(task.projectId as any) : undefined,
+    assignees: Array.isArray(task.assigneeIds)
+      ? task.assigneeIds.map((u: any) => normalizeDoc(u as any)).filter(Boolean)
+      : [],
+  }));
 }
 
 export async function createProject(project: Record<string, unknown>) {
@@ -800,7 +870,15 @@ export async function getTasksCreatedByDate(startDate: Date, endDate: Date) {
 
 export async function updateProjectTask(id: string, updates: Record<string, unknown>) {
   await requireDb();
-  await ProjectTask.findByIdAndUpdate(toObjectId(id), updates);
+  const payload: Record<string, unknown> = { ...updates };
+  if (Array.isArray((payload as any).assigneeIds)) {
+    const rawIds = (payload as any).assigneeIds as string[];
+    const unique = Array.from(
+      new Set(rawIds.filter(Boolean).filter(id => Types.ObjectId.isValid(id)))
+    );
+    payload.assigneeIds = unique.map(toObjectId);
+  }
+  await ProjectTask.findByIdAndUpdate(toObjectId(id), payload);
 }
 
 export async function getCompletedTasksForUserByDate(userId: string, date: Date) {

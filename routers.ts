@@ -973,6 +973,88 @@ export const appRouter = router({
       return await db.getProjectsWithAssignments();
     }),
 
+    getProjectTasks: protectedProcedure
+      .input(z.object({ projectId: z.string() }))
+      .query(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        return await db.getAllProjectTasks(input.projectId);
+      }),
+
+    createTaskForProject: protectedProcedure
+      .input(
+        z.object({
+          projectId: z.string(),
+          title: z.string().min(1),
+          description: z.string().optional(),
+          priority: z.enum(["low", "medium", "high"]).optional(),
+          status: z.enum(["todo", "in_progress", "completed", "blocked"]).optional(),
+          assigneeIds: z.array(z.string()).min(1, "Select at least one assignee"),
+          completionDate: z.date().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        const created = await db.createProjectTask({
+          projectId: input.projectId,
+          userId: ctx.user.id,
+          title: input.title,
+          description: input.description,
+          priority: input.priority || "medium",
+          status: input.status || "todo",
+          completedAt: input.status === "completed" ? new Date() : undefined,
+          assigneeIds: input.assigneeIds,
+          completionDate: input.completionDate,
+        });
+        return { success: true, task: created };
+      }),
+
+    updateTaskForProject: protectedProcedure
+      .input(
+        z.object({
+          taskId: z.string(),
+          title: z.string().optional(),
+          description: z.string().optional(),
+          priority: z.enum(["low", "medium", "high"]).optional(),
+          status: z.enum(["todo", "in_progress", "completed", "blocked"]).optional(),
+          assigneeIds: z.array(z.string()).optional(),
+          completionDate: z.date().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        const { taskId, ...updates } = input;
+        const updateData: any = { ...updates };
+        if (updates.status === "completed") {
+          updateData.completedAt = new Date();
+        }
+        await db.updateProjectTask(taskId, updateData);
+        return { success: true };
+      }),
+
+    getEmployeeProjects: protectedProcedure
+      .input(z.object({ employeeId: z.string() }))
+      .query(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        return await db.getProjectsForEmployee(input.employeeId);
+      }),
+
+    getEmployeeTasks: protectedProcedure
+      .input(z.object({ employeeId: z.string() }))
+      .query(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        return await db.getTasksByEmployee(input.employeeId);
+      }),
+
     getResourcePerformance: protectedProcedure.query(async ({ ctx }) => {
       if (ctx.user.role !== "admin") {
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
