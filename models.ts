@@ -214,6 +214,24 @@ const chatMessageSchema = new Schema<IChatMessage>({
 
 export const ChatMessage = model<IChatMessage>('ChatMessage', chatMessageSchema);
 
+// ==================== Note Model ====================
+export interface INote extends Document {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  title: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const noteSchema = new Schema<INote>({
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  title: { type: String, required: true },
+  content: { type: String, default: "" },
+}, { timestamps: true });
+
+export const Note = model<INote>('Note', noteSchema);
+
 // ==================== Payslip Model ====================
 export interface IPayslip extends Document {
   _id: Types.ObjectId;

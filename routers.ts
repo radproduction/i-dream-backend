@@ -178,6 +178,21 @@ export const appRouter = router({
         await db.updateUserPassword(ctx.user.id, input.newPassword);
         return { success: true };
       }),
+
+    resetPassword: protectedProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          newPassword: z.string().min(6),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        await db.updateUserPassword(input.id, input.newPassword);
+        return { success: true };
+      }),
   }),
 
   timeTracking: router({
@@ -511,6 +526,54 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
         await db.markMessageAsRead(input.messageId);
+        return { success: true };
+      }),
+  }),
+
+  notes: router({
+    list: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getNotesByUser(ctx.user.id);
+    }),
+
+    create: protectedProcedure
+      .input(
+        z.object({
+          title: z.string().min(1),
+          content: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const created = await db.createNote({
+          userId: ctx.user.id,
+          title: input.title,
+          content: input.content || "",
+        });
+        return { success: true, note: created };
+      }),
+
+    update: protectedProcedure
+      .input(
+        z.object({
+          id: z.string(),
+          title: z.string().optional(),
+          content: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const updated = await db.updateNote(input.id, ctx.user.id, {
+          title: input.title,
+          content: input.content,
+        });
+        if (!updated) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Note not found" });
+        }
+        return { success: true, note: updated };
+      }),
+
+    delete: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        await db.deleteNote(input.id, ctx.user.id);
         return { success: true };
       }),
   }),
@@ -909,6 +972,46 @@ export const appRouter = router({
       }
       return await db.getProjectsWithAssignments();
     }),
+
+    getResourcePerformance: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+      }
+      return await db.getResourcePerformance();
+    }),
+
+    deleteProject: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        await db.deleteProject(input.id);
+        return { success: true };
+      }),
+
+    deleteTask: protectedProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        await db.deleteProjectTask(input.id);
+        return { success: true };
+      }),
+
+    getTasksByDate: protectedProcedure
+      .input(z.object({ date: z.date() }))
+      .query(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        const start = new Date(input.date);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(input.date);
+        end.setHours(23, 59, 59, 999);
+        return await db.getTasksCreatedByDate(start, end);
+      }),
 
     assignProject: protectedProcedure
       .input(

@@ -11,6 +11,7 @@ import {
   LeaveApplication,
   Meeting,
   MeetingParticipant,
+  Note,
   Notification,
   OvertimeEntry,
   Payslip,
@@ -518,6 +519,55 @@ export async function markMessageAsRead(id: string) {
   await ChatMessage.findByIdAndUpdate(toObjectId(id), { isRead: true });
 }
 
+export async function getNotesByUser(userId: string) {
+  if (!(await optionalDb())) return [];
+  const notes = await Note.find({ userId: toObjectId(userId) })
+    .sort({ updatedAt: -1, createdAt: -1 })
+    .lean();
+  return normalizeDocs(notes);
+}
+
+export async function createNote(note: {
+  userId: string;
+  title: string;
+  content?: string;
+}) {
+  await requireDb();
+  const created = await Note.create({
+    userId: toObjectId(note.userId),
+    title: note.title,
+    content: note.content || "",
+  });
+  return normalizeDoc(created);
+}
+
+export async function updateNote(
+  noteId: string,
+  userId: string,
+  updates: { title?: string; content?: string }
+) {
+  await requireDb();
+  const payload: Record<string, unknown> = {};
+  if (updates.title !== undefined) payload.title = updates.title;
+  if (updates.content !== undefined) payload.content = updates.content;
+
+  const updated = await Note.findOneAndUpdate(
+    { _id: toObjectId(noteId), userId: toObjectId(userId) },
+    { $set: payload },
+    { new: true }
+  ).lean();
+  return normalizeDoc(updated);
+}
+
+export async function deleteNote(noteId: string, userId: string) {
+  await requireDb();
+  await Note.findOneAndDelete({
+    _id: toObjectId(noteId),
+    userId: toObjectId(userId),
+  });
+  return true;
+}
+
 export async function getLatestPayslip(userId: string) {
   if (!(await optionalDb())) return undefined;
   const payslip = await Payslip.findOne({ userId: toObjectId(userId) })
@@ -694,6 +744,58 @@ export async function createProjectTask(task: Record<string, unknown>) {
     assigneeIds: fallbackAssignees.map(toObjectId),
   });
   return normalizeDoc(created);
+}
+
+export async function deleteProjectTask(taskId: string) {
+  await requireDb();
+  const taskObjectId = toObjectId(taskId);
+  await OvertimeEntry.deleteMany({ taskId: taskObjectId });
+  await ProjectTask.findByIdAndDelete(taskObjectId);
+  return true;
+}
+
+export async function deleteProject(projectId: string) {
+  await requireDb();
+  const projectObjectId = toObjectId(projectId);
+  const tasks = await ProjectTask.find({ projectId: projectObjectId }).select("_id").lean();
+  const taskIds = tasks.map((t: any) => t._id);
+  if (taskIds.length > 0) {
+    await OvertimeEntry.deleteMany({ taskId: { $in: taskIds } });
+  }
+  await ProjectTask.deleteMany({ projectId: projectObjectId });
+  await ProjectAssignment.deleteMany({ projectId: projectObjectId });
+  await OvertimeEntry.deleteMany({ projectId: projectObjectId });
+  await Project.findByIdAndDelete(projectObjectId);
+  return true;
+}
+
+export async function getTasksCreatedByDate(startDate: Date, endDate: Date) {
+  await requireDb();
+  const tasks = await ProjectTask.find({
+    createdAt: { $gte: startDate, $lte: endDate },
+  })
+    .populate("projectId")
+    .populate("assigneeIds")
+    .populate("userId")
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return tasks.map((task: any) => {
+    const assigneeList =
+      Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0
+        ? task.assigneeIds
+        : task.userId
+          ? [task.userId]
+          : [];
+
+    return {
+      ...normalizeDoc(task),
+      project: task.projectId ? normalizeDoc(task.projectId as any) : undefined,
+      assignees: assigneeList
+        .map((u: any) => normalizeDoc(u as any))
+        .filter(Boolean),
+    };
+  });
 }
 
 export async function updateProjectTask(id: string, updates: Record<string, unknown>) {
@@ -1184,6 +1286,93 @@ export async function getProjectsWithAssignments() {
       assignees,
       tasks: total,
       progress,
+    };
+  });
+}
+
+export async function getResourcePerformance() {
+  await requireDb();
+  const users = await User.find({ role: "user" }).lean();
+  const userIds = users.map((u: any) => u._id);
+  const userIdSet = new Set(userIds.map((id: any) => String(id)));
+
+  const assignments = await ProjectAssignment.find({ userId: { $in: userIds } }).lean();
+  const projectIds = Array.from(
+    new Set(assignments.map((a: any) => String(a.projectId)))
+  );
+  const projects = await Project.find({ _id: { $in: projectIds.map(toObjectId) } }).lean();
+  const projectStatusMap = new Map(projects.map((p: any) => [String(p._id), p.status]));
+
+  const tasks = await ProjectTask.find({
+    $or: [
+      { assigneeIds: { $in: userIds } },
+      {
+        $and: [
+          {
+            $or: [
+              { assigneeIds: { $exists: false } },
+              { assigneeIds: { $size: 0 } },
+            ],
+          },
+          { userId: { $in: userIds } },
+        ],
+      },
+    ],
+  }).lean();
+
+  const taskMap = new Map<string, { total: number; completed: number }>();
+  const projectMap = new Map<string, number>();
+
+  users.forEach((u: any) => {
+    taskMap.set(String(u._id), { total: 0, completed: 0 });
+    projectMap.set(String(u._id), 0);
+  });
+
+  assignments.forEach((assignment: any) => {
+    const userId = String(assignment.userId);
+    if (!userIdSet.has(userId)) return;
+    const status = projectStatusMap.get(String(assignment.projectId));
+    if (status === "active") {
+      projectMap.set(userId, (projectMap.get(userId) || 0) + 1);
+    }
+  });
+
+  tasks.forEach((task: any) => {
+    const assignees =
+      Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0
+        ? task.assigneeIds
+        : task.userId
+          ? [task.userId]
+          : [];
+    assignees
+      .map((id: any) => String(id))
+      .filter((id: string) => userIdSet.has(id))
+      .forEach((id: string) => {
+        const current = taskMap.get(id) || { total: 0, completed: 0 };
+        current.total += 1;
+        if (task.status === "completed") {
+          current.completed += 1;
+        }
+        taskMap.set(id, current);
+      });
+  });
+
+  return users.map((u: any) => {
+    const key = String(u._id);
+    const taskStats = taskMap.get(key) || { total: 0, completed: 0 };
+    const activeProjects = projectMap.get(key) || 0;
+    const completionRate = taskStats.total
+      ? Math.round((taskStats.completed / taskStats.total) * 100)
+      : 0;
+
+    return {
+      userId: key,
+      name: u.name || u.employeeId || "Employee",
+      tasksTotal: taskStats.total,
+      tasksCompleted: taskStats.completed,
+      tasksPending: Math.max(0, taskStats.total - taskStats.completed),
+      completionRate,
+      activeProjects,
     };
   });
 }
