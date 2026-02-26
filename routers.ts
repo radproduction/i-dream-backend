@@ -273,6 +273,55 @@ export const appRouter = router({
         return { success: true, session };
       }),
 
+    // Add overtime entry (current day or previous day only)
+    addOvertime: protectedProcedure
+      .input(
+        z.object({
+          workDate: z.date(),
+          hours: z.number().positive(),
+          projectId: z.string(),
+          taskId: z.string(),
+          description: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const today = new Date();
+        const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const startYesterday = new Date(startToday);
+        startYesterday.setDate(startYesterday.getDate() - 1);
+        const workDateStart = new Date(input.workDate.getFullYear(), input.workDate.getMonth(), input.workDate.getDate());
+
+        if (workDateStart < startYesterday || workDateStart > startToday) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Overtime can only be added for today or yesterday",
+          });
+        }
+
+        const entry = await db.createOvertimeEntry({
+          userId: ctx.user.id,
+          projectId: input.projectId,
+          taskId: input.taskId,
+          workDate: workDateStart,
+          hours: input.hours,
+          description: input.description,
+        });
+
+        return { success: true, entry };
+      }),
+
+    // Get overtime entries for date range
+    getOvertimeByRange: protectedProcedure
+      .input(
+        z.object({
+          startDate: z.date(),
+          endDate: z.date(),
+        })
+      )
+      .query(async ({ input, ctx }) => {
+        return await db.getOvertimeEntriesByDateRange(ctx.user.id, input.startDate, input.endDate);
+      }),
+
     // Get active time entry
     getActive: protectedProcedure.query(async ({ ctx }) => {
       const activeEntry = await db.getActiveTimeEntry(ctx.user.id);
@@ -558,6 +607,7 @@ export const appRouter = router({
         status: z.enum(["todo", "in_progress", "completed", "blocked"]).optional(),
         timeEntryId: z.string().optional(),
         assigneeIds: z.array(z.string()).optional(),
+        completionDate: z.date().optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const created = await db.createProjectTask({
@@ -570,6 +620,7 @@ export const appRouter = router({
           completedAt: input.status === "completed" ? new Date() : undefined,
           timeEntryId: input.timeEntryId,
           assigneeIds: input.assigneeIds,
+          completionDate: input.completionDate,
         });
 
         return { success: true, task: created };
@@ -583,6 +634,7 @@ export const appRouter = router({
         title: z.string().optional(),
         description: z.string().optional(),
         priority: z.enum(["low", "medium", "high"]).optional(),
+        completionDate: z.date().optional(),
       }))
       .mutation(async ({ input }) => {
         const { taskId, ...updates } = input;
@@ -599,6 +651,11 @@ export const appRouter = router({
     // Get project stats
     getStats: protectedProcedure.query(async ({ ctx }) => {
       return await db.getProjectStats(ctx.user.id);
+    }),
+
+    // Get task completion stats for current user
+    getMyTaskStats: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getTaskStatsForUser(ctx.user.id);
     }),
   }),
 
@@ -929,6 +986,14 @@ export const appRouter = router({
         throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
       }
       return await db.getAnnouncementsWithReadCounts();
+    }),
+
+    // Task completion stats (all tasks)
+    getTaskStats: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user.role !== "admin") {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+      }
+      return await db.getTaskStatsForAll();
     }),
 
     createAnnouncement: protectedProcedure

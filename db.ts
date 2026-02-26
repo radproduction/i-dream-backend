@@ -12,6 +12,7 @@ import {
   Meeting,
   MeetingParticipant,
   Notification,
+  OvertimeEntry,
   Payslip,
   Project,
   ProjectAssignment,
@@ -346,6 +347,41 @@ export async function createWorkSession(session: {
     description: session.description,
   });
   return normalizeDoc(created);
+}
+
+export async function createOvertimeEntry(entry: {
+  userId: string;
+  projectId: string;
+  taskId: string;
+  workDate: Date;
+  hours: number;
+  description?: string;
+}) {
+  await requireDb();
+  const created = await OvertimeEntry.create({
+    userId: toObjectId(entry.userId),
+    projectId: toObjectId(entry.projectId),
+    taskId: toObjectId(entry.taskId),
+    workDate: entry.workDate,
+    hours: Number(entry.hours.toFixed(2)),
+    description: entry.description,
+  });
+  return normalizeDoc(created);
+}
+
+export async function getOvertimeEntriesByDateRange(
+  userId: string,
+  startDate: Date,
+  endDate: Date
+) {
+  if (!(await optionalDb())) return [];
+  const entries = await OvertimeEntry.find({
+    userId: toObjectId(userId),
+    workDate: { $gte: startDate, $lte: endDate },
+  })
+    .sort({ workDate: -1, createdAt: -1 })
+    .lean();
+  return normalizeDocs(entries);
 }
 
 export async function getTimeEntriesByDateRange(
@@ -751,6 +787,50 @@ export async function getProjectStats(userId: string) {
     activeProjects,
     completedTasks,
   };
+}
+
+export async function getTaskStatsForUser(userId: string) {
+  if (!(await optionalDb())) {
+    return { total: 0, completed: 0 };
+  }
+
+  const userObjectId = toObjectId(userId);
+  const assignmentFilter = {
+    $or: [
+      { assigneeIds: userObjectId },
+      {
+        $and: [
+          {
+            $or: [
+              { assigneeIds: { $exists: false } },
+              { assigneeIds: { $size: 0 } },
+            ],
+          },
+          { userId: userObjectId },
+        ],
+      },
+    ],
+  };
+
+  const [total, completed] = await Promise.all([
+    ProjectTask.countDocuments(assignmentFilter),
+    ProjectTask.countDocuments({ ...assignmentFilter, status: "completed" }),
+  ]);
+
+  return { total, completed };
+}
+
+export async function getTaskStatsForAll() {
+  if (!(await optionalDb())) {
+    return { total: 0, completed: 0 };
+  }
+
+  const [total, completed] = await Promise.all([
+    ProjectTask.countDocuments({}),
+    ProjectTask.countDocuments({ status: "completed" }),
+  ]);
+
+  return { total, completed };
 }
 
 export async function createNotification(notification: {

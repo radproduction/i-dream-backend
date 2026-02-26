@@ -88,6 +88,30 @@ const workSessionSchema = new Schema<IWorkSession>({
 
 export const WorkSession = model<IWorkSession>('WorkSession', workSessionSchema);
 
+// ==================== Overtime Entry Model ====================
+export interface IOvertimeEntry extends Document {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  projectId: Types.ObjectId;
+  taskId: Types.ObjectId;
+  workDate: Date;
+  hours: number;
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const overtimeEntrySchema = new Schema<IOvertimeEntry>({
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
+  taskId: { type: Schema.Types.ObjectId, ref: 'ProjectTask', required: true },
+  workDate: { type: Date, required: true },
+  hours: { type: Number, required: true },
+  description: String,
+}, { timestamps: true });
+
+export const OvertimeEntry = model<IOvertimeEntry>('OvertimeEntry', overtimeEntrySchema);
+
 // ==================== Break Log Model ====================
 export interface IBreakLog extends Document {
   _id: Types.ObjectId;
@@ -303,6 +327,7 @@ export interface IProjectTask extends Document {
   description?: string;
   status: 'todo' | 'in_progress' | 'completed' | 'blocked';
   priority: 'low' | 'medium' | 'high';
+  completionDate?: Date;
   completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -317,6 +342,7 @@ const projectTaskSchema = new Schema<IProjectTask>({
   description: String,
   status: { type: String, enum: ['todo', 'in_progress', 'completed', 'blocked'], default: 'todo', required: true },
   priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium', required: true },
+  completionDate: Date,
   completedAt: Date,
 }, { timestamps: true });
 
