@@ -236,6 +236,43 @@ export const appRouter = router({
         };
       }),
 
+    // Add work session (manual entry after clock out)
+    addWorkSession: protectedProcedure
+      .input(
+        z.object({
+          startTime: z.date(),
+          endTime: z.date(),
+          sessionType: z.enum(["remote", "onsite"]).default("remote"),
+          description: z.string().optional(),
+        })
+      )
+      .mutation(async ({ input, ctx }) => {
+        const activeEntry = await db.getActiveTimeEntry(ctx.user.id);
+        if (activeEntry) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Please clock out before adding a work session",
+          });
+        }
+
+        if (input.endTime <= input.startTime) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "End time must be after start time",
+          });
+        }
+
+        const session = await db.createWorkSession({
+          userId: ctx.user.id,
+          startTime: input.startTime,
+          endTime: input.endTime,
+          sessionType: input.sessionType,
+          description: input.description,
+        });
+
+        return { success: true, session };
+      }),
+
     // Get active time entry
     getActive: protectedProcedure.query(async ({ ctx }) => {
       const activeEntry = await db.getActiveTimeEntry(ctx.user.id);

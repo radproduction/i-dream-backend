@@ -19,6 +19,7 @@ import {
   TimeEntry,
   User,
   EmployeeDocument,
+  WorkSession,
 } from "./models";
 
 type UpsertUserInput = {
@@ -319,6 +320,32 @@ export async function getActiveTimeEntry(userId: string) {
 export async function updateTimeEntry(id: string, updates: Record<string, unknown>) {
   await requireDb();
   await TimeEntry.findByIdAndUpdate(toObjectId(id), updates);
+}
+
+export async function createWorkSession(session: {
+  userId: string;
+  startTime: Date;
+  endTime: Date;
+  sessionType: "remote" | "onsite";
+  description?: string;
+}) {
+  await requireDb();
+  const startTime = new Date(session.startTime);
+  const endTime = new Date(session.endTime);
+  const sessionDate = new Date(startTime);
+  sessionDate.setHours(0, 0, 0, 0);
+  const totalHours = (endTime.getTime() - startTime.getTime()) / (1000 * 60 * 60);
+
+  const created = await WorkSession.create({
+    userId: toObjectId(session.userId),
+    sessionDate,
+    startTime,
+    endTime,
+    totalHours: Number(totalHours.toFixed(2)),
+    sessionType: session.sessionType,
+    description: session.description,
+  });
+  return normalizeDoc(created);
 }
 
 export async function getTimeEntriesByDateRange(

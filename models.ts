@@ -62,6 +62,32 @@ const timeEntrySchema = new Schema<ITimeEntry>({
 
 export const TimeEntry = model<ITimeEntry>('TimeEntry', timeEntrySchema);
 
+// ==================== Work Session Model ====================
+export interface IWorkSession extends Document {
+  _id: Types.ObjectId;
+  userId: Types.ObjectId;
+  sessionDate: Date;
+  startTime: Date;
+  endTime: Date;
+  totalHours: number;
+  sessionType: 'remote' | 'onsite';
+  description?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const workSessionSchema = new Schema<IWorkSession>({
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  sessionDate: { type: Date, required: true },
+  startTime: { type: Date, required: true },
+  endTime: { type: Date, required: true },
+  totalHours: { type: Number, required: true },
+  sessionType: { type: String, enum: ['remote', 'onsite'], default: 'remote', required: true },
+  description: String,
+}, { timestamps: true });
+
+export const WorkSession = model<IWorkSession>('WorkSession', workSessionSchema);
+
 // ==================== Break Log Model ====================
 export interface IBreakLog extends Document {
   _id: Types.ObjectId;
