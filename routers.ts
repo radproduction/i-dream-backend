@@ -621,6 +621,11 @@ export const appRouter = router({
       return await db.getUserProjects(ctx.user.id);
     }),
 
+    // Get user's tasks across projects
+    getMyTasks: protectedProcedure.query(async ({ ctx }) => {
+      return await db.getTasksByEmployee(ctx.user.id);
+    }),
+
     // Get project tasks
     getTasks: protectedProcedure
       .input(z.object({
@@ -1102,6 +1107,8 @@ export const appRouter = router({
           description: z.string().optional(),
           priority: z.enum(["low", "medium", "high"]).default("medium"),
           employeeIds: z.array(z.string()).min(1),
+          startDate: z.date().optional(),
+          endDate: z.date().optional(),
         })
       )
       .mutation(async ({ input, ctx }) => {
@@ -1115,9 +1122,21 @@ export const appRouter = router({
           status: "active",
           source: "team_lead",
           createdBy: ctx.user.id,
+          startDate: input.startDate,
+          endDate: input.endDate,
         });
         for (const userId of input.employeeIds) {
           await db.assignUserToProject(projectId, userId);
+          await db.createNotification({
+            userId,
+            type: "project_assigned",
+            title: "New project assigned",
+            message: `You have been assigned to ${input.name}.`,
+            priority: "medium",
+            relatedId: projectId,
+            relatedType: "project",
+          });
+          emitNotification({ userId });
         }
         return { success: true, projectId };
       }),
@@ -1157,6 +1176,21 @@ export const appRouter = router({
           throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
         }
         return await db.getTimeEntriesByRangeForAll(input.startDate, input.endDate);
+      }),
+
+    getEmployeeAttendance: protectedProcedure
+      .input(
+        z.object({
+          employeeId: z.string(),
+          startDate: z.date(),
+          endDate: z.date(),
+        })
+      )
+      .query(async ({ input, ctx }) => {
+        if (ctx.user.role !== "admin") {
+          throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
+        }
+        return await db.getTimeEntriesByDateRange(input.employeeId, input.startDate, input.endDate);
       }),
 
     getPayslips: protectedProcedure.query(async ({ ctx }) => {
