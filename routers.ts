@@ -557,6 +557,7 @@ export const appRouter = router({
         priority: z.enum(["low", "medium", "high"]).optional(),
         status: z.enum(["todo", "in_progress", "completed", "blocked"]).optional(),
         timeEntryId: z.string().optional(),
+        assigneeIds: z.array(z.string()).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
         const created = await db.createProjectTask({
@@ -568,6 +569,7 @@ export const appRouter = router({
           status: input.status || "todo",
           completedAt: input.status === "completed" ? new Date() : undefined,
           timeEntryId: input.timeEntryId,
+          assigneeIds: input.assigneeIds,
         });
 
         return { success: true, task: created };

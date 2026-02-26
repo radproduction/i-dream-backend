@@ -297,6 +297,7 @@ export interface IProjectTask extends Document {
   _id: Types.ObjectId;
   projectId: Types.ObjectId;
   userId: Types.ObjectId;
+  assigneeIds?: Types.ObjectId[];
   timeEntryId?: Types.ObjectId;
   title: string;
   description?: string;
@@ -310,6 +311,7 @@ export interface IProjectTask extends Document {
 const projectTaskSchema = new Schema<IProjectTask>({
   projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  assigneeIds: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   timeEntryId: { type: Schema.Types.ObjectId, ref: 'TimeEntry' },
   title: { type: String, required: true },
   description: String,

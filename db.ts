@@ -593,9 +593,23 @@ export async function getUserProjects(userId: string) {
 
 export async function getProjectTasks(projectId: string, userId: string) {
   if (!(await optionalDb())) return [];
+  const userObjectId = toObjectId(userId);
   const tasks = await ProjectTask.find({
     projectId: toObjectId(projectId),
-    userId: toObjectId(userId),
+    $or: [
+      { assigneeIds: userObjectId },
+      {
+        $and: [
+          {
+            $or: [
+              { assigneeIds: { $exists: false } },
+              { assigneeIds: { $size: 0 } },
+            ],
+          },
+          { userId: userObjectId },
+        ],
+      },
+    ],
   }).lean();
   return normalizeDocs(tasks);
 }
@@ -621,11 +635,27 @@ export async function assignUserToProject(projectId: string, userId: string) {
 
 export async function createProjectTask(task: Record<string, unknown>) {
   await requireDb();
+  const rawAssigneeIds = Array.isArray((task as any).assigneeIds)
+    ? ((task as any).assigneeIds as string[])
+    : [];
+  const uniqueAssignees = Array.from(
+    new Set(
+      rawAssigneeIds
+        .filter(Boolean)
+        .filter(id => Types.ObjectId.isValid(id))
+    )
+  );
+  const fallbackAssignees =
+    uniqueAssignees.length === 0 && typeof task.userId === "string" && Types.ObjectId.isValid(task.userId)
+      ? [task.userId]
+      : uniqueAssignees;
+
   const created = await ProjectTask.create({
     ...task,
     projectId: task.projectId ? toObjectId(task.projectId as string) : undefined,
     userId: task.userId ? toObjectId(task.userId as string) : undefined,
     timeEntryId: task.timeEntryId ? toObjectId(task.timeEntryId as string) : undefined,
+    assigneeIds: fallbackAssignees.map(toObjectId),
   });
   return normalizeDoc(created);
 }
@@ -642,13 +672,33 @@ export async function getCompletedTasksForUserByDate(userId: string, date: Date)
   const end = new Date(date);
   end.setHours(23, 59, 59, 999);
 
+  const userObjectId = toObjectId(userId);
   const tasks = await ProjectTask.find({
-    userId: toObjectId(userId),
     status: "completed",
-    $or: [
-      { completedAt: { $gte: start, $lte: end } },
-      { completedAt: { $exists: false }, updatedAt: { $gte: start, $lte: end } },
-      { completedAt: null, updatedAt: { $gte: start, $lte: end } },
+    $and: [
+      {
+        $or: [
+          { assigneeIds: userObjectId },
+          {
+            $and: [
+              {
+                $or: [
+                  { assigneeIds: { $exists: false } },
+                  { assigneeIds: { $size: 0 } },
+                ],
+              },
+              { userId: userObjectId },
+            ],
+          },
+        ],
+      },
+      {
+        $or: [
+          { completedAt: { $gte: start, $lte: end } },
+          { completedAt: { $exists: false }, updatedAt: { $gte: start, $lte: end } },
+          { completedAt: null, updatedAt: { $gte: start, $lte: end } },
+        ],
+      },
     ],
   })
     .populate("projectId")
@@ -677,7 +727,23 @@ export async function getProjectStats(userId: string) {
     projectIds.length > 0
       ? Project.countDocuments({ _id: { $in: projectIds }, status: "active" })
       : Promise.resolve(0),
-    ProjectTask.countDocuments({ userId: userObjectId, status: "completed" }),
+    ProjectTask.countDocuments({
+      status: "completed",
+      $or: [
+        { assigneeIds: userObjectId },
+        {
+          $and: [
+            {
+              $or: [
+                { assigneeIds: { $exists: false } },
+                { assigneeIds: { $size: 0 } },
+              ],
+            },
+            { userId: userObjectId },
+          ],
+        },
+      ],
+    }),
   ]);
 
   return {
@@ -1047,7 +1113,19 @@ export async function getOngoingTasksWithAssignments() {
   const tasks = await ProjectTask.find({ status: { $ne: "completed" } })
     .sort({ createdAt: -1 })
     .lean();
-  const userIds = Array.from(new Set(tasks.map((t: any) => String(t.userId))));
+  const userIds = Array.from(
+    new Set(
+      tasks.flatMap((t: any) => {
+        const assignees =
+          Array.isArray(t.assigneeIds) && t.assigneeIds.length > 0
+            ? t.assigneeIds
+            : t.userId
+              ? [t.userId]
+              : [];
+        return assignees.map((id: any) => String(id));
+      })
+    )
+  );
   const projectIds = Array.from(new Set(tasks.map((t: any) => String(t.projectId))));
   const users = await User.find({ _id: { $in: userIds.map(toObjectId) } }).lean();
   const projects = await Project.find({ _id: { $in: projectIds.map(toObjectId) } }).lean();
@@ -1056,7 +1134,20 @@ export async function getOngoingTasksWithAssignments() {
 
   return tasks.map((task: any) => ({
     ...normalizeDoc(task),
-    assignee: userMap.get(String(task.userId)),
+    assignees: Array.from(
+      new Set(
+        (
+          Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0
+            ? task.assigneeIds
+            : task.userId
+              ? [task.userId]
+              : []
+        )
+          .filter(Boolean)
+          .map((id: any) => userMap.get(String(id)))
+          .filter(Boolean)
+      )
+    ),
     project: projectMap.get(String(task.projectId)),
   }));
 }
