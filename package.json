@@ -8,6 +8,7 @@
     "build": "esbuild _core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "start": "node dist/index.js",
     "seed:manus": "tsx seed/seed-manus.ts",
+    "seed:employees": "tsx seed/seed-employees.ts",
     "test": "vitest run"
   },
   "dependencies": {
@@ -16,13 +17,13 @@
     "cookie": "^1.0.2",
     "cors": "^2.8.6",
     "dotenv": "^17.2.2",
+    "esbuild": "^0.25.0",
     "express": "^4.21.2",
     "jose": "6.1.0",
     "mongoose": "^9.1.0",
     "multer": "^2.0.2",
     "otplib": "^12.0.1",
     "qrcode": "^1.5.4",
-    "esbuild": "^0.25.0",
     "socket.io": "^4.8.1",
     "superjson": "^1.13.3",
     "zod": "^4.1.12"
@@ -35,6 +36,7 @@
     "cross-env": "^7.0.3",
     "tsx": "^4.19.1",
     "typescript": "5.9.3",
-    "vitest": "^2.1.4"
+    "vitest": "^2.1.4",
+    "xlsx": "^0.18.5"
   }
 }
