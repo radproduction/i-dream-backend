@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "seed:manus": "tsx seed/seed-manus.ts",
     "seed:employees": "tsx seed/seed-employees.ts",
+    "export:credentials": "tsx seed/export-employee-credentials.ts",
     "test": "vitest run"
   },
   "dependencies": {

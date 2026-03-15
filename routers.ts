@@ -362,6 +362,35 @@ export const appRouter = router({
       return activeEntry || null;
     }),
 
+    // Update location for active time entry
+    updateLocation: protectedProcedure
+      .input(
+        z.object({
+          location: z.object({
+            lat: z.number(),
+            lng: z.number(),
+            accuracy: z.number().optional(),
+            address: z.string().optional(),
+            source: z.enum(["gps", "manual"]).optional(),
+          }),
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const activeEntry = await db.getActiveTimeEntry(ctx.user.id);
+        if (!activeEntry) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "No active time entry found",
+          });
+        }
+
+        await db.updateTimeEntry(activeEntry.id, {
+          location: { ...input.location, capturedAt: new Date() },
+        });
+
+        return { success: true };
+      }),
+
     // Start break
     startBreak: protectedProcedure
       .input(z.object({
