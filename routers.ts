@@ -516,12 +516,12 @@ export const appRouter = router({
         priority: z.enum(["low", "medium", "high"]).optional(),
       }))
       .mutation(async ({ input, ctx }) => {
-        await db.createFormSubmission({
+        const created = await db.createFormSubmission({
           userId: ctx.user.id,
           ...input,
         });
 
-        return { success: true };
+        return { success: true, ticketId: created?.id };
       }),
 
     // Get user's form submissions
