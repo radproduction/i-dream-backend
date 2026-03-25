@@ -40,10 +40,13 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  const cookieDomain = ENV.cookieDomain?.trim() || undefined;
+
   return {
     httpOnly: true,
     path: "/",
     sameSite: "none",
+    domain: cookieDomain,
     secure: isSecureRequest(req) || ENV.isProduction,
   };
 }

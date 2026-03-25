@@ -8,4 +8,5 @@ export const ENV = {
   officeLng: process.env.OFFICE_LNG ? Number(process.env.OFFICE_LNG) : null,
   officeRadiusKm: process.env.OFFICE_RADIUS_KM ? Number(process.env.OFFICE_RADIUS_KM) : 0.5,
   geocodeUserAgent: process.env.GEOCODE_USER_AGENT ?? "",
+  cookieDomain: process.env.COOKIE_DOMAIN ?? "",
 };
