@@ -9,7 +9,7 @@ const CACHE_TTL_MS = 1000 * 60 * 60; // 1 hour
 const cache = new Map<string, CacheEntry>();
 
 function cacheKey(lat: number, lng: number) {
-  return `${lat.toFixed(5)},${lng.toFixed(5)}`;
+  return `en:${lat.toFixed(5)},${lng.toFixed(5)}`;
 }
 
 export async function reverseGeocode(lat: number, lng: number) {
@@ -25,11 +25,13 @@ export async function reverseGeocode(lat: number, lng: number) {
   url.searchParams.set("lon", String(lng));
   url.searchParams.set("zoom", "18");
   url.searchParams.set("addressdetails", "1");
+  url.searchParams.set("accept-language", "en");
 
   try {
     const response = await fetch(url.toString(), {
       headers: {
         accept: "application/json",
+        "accept-language": "en",
         "user-agent":
           ENV.geocodeUserAgent || "i-dream-hrms/1.0 (contact: admin)",
       },
