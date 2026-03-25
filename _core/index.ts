@@ -15,6 +15,7 @@ async function startServer() {
   await connectToMongoDB();
 
   const app = express();
+  app.set("trust proxy", 1);
   const server = createServer(app);
   initRealtime(server);
   const corsOrigin = process.env.CORS_ORIGIN
