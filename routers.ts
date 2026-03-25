@@ -9,6 +9,7 @@ import { createSessionToken, setSessionCookie, verifySessionToken } from "./_cor
 import { authenticator } from "otplib";
 import { toDataURL } from "qrcode";
 import { emitChatMessage, emitNotification, emitAnnouncement } from "./_core/realtime";
+import { reverseGeocode } from "./_core/geocoding";
 
 export const appRouter = router({
   system: systemRouter,
@@ -223,12 +224,23 @@ export const appRouter = router({
         });
       }
 
+      let resolvedLocation = input?.location;
+      if (resolvedLocation && !resolvedLocation.address) {
+        const address = await reverseGeocode(
+          resolvedLocation.lat,
+          resolvedLocation.lng
+        );
+        if (address) {
+          resolvedLocation = { ...resolvedLocation, address };
+        }
+      }
+
       await db.createTimeEntry({
         userId: ctx.user.id,
         timeIn: new Date(),
         status: "active",
-        location: input?.location
-          ? { ...input.location, capturedAt: new Date() }
+        location: resolvedLocation
+          ? { ...resolvedLocation, capturedAt: new Date() }
           : undefined,
       });
 
@@ -384,8 +396,19 @@ export const appRouter = router({
           });
         }
 
+        let resolvedLocation = input.location;
+        if (!resolvedLocation.address) {
+          const address = await reverseGeocode(
+            resolvedLocation.lat,
+            resolvedLocation.lng
+          );
+          if (address) {
+            resolvedLocation = { ...resolvedLocation, address };
+          }
+        }
+
         await db.updateTimeEntry(activeEntry.id, {
-          location: { ...input.location, capturedAt: new Date() },
+          location: { ...resolvedLocation, capturedAt: new Date() },
         });
 
         return { success: true };
@@ -528,6 +551,15 @@ export const appRouter = router({
     getMyForms: protectedProcedure.query(async ({ ctx }) => {
       return await db.getFormSubmissionsByUser(ctx.user.id);
     }),
+  }),
+
+  geo: router({
+    reverseGeocode: protectedProcedure
+      .input(z.object({ lat: z.number(), lng: z.number() }))
+      .query(async ({ input }) => {
+        const address = await reverseGeocode(input.lat, input.lng);
+        return { address };
+      }),
   }),
 
   chat: router({
