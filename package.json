@@ -10,6 +10,7 @@
     "seed:manus": "tsx seed/seed-manus.ts",
     "seed:employees": "tsx seed/seed-employees.ts",
     "export:credentials": "tsx seed/export-employee-credentials.ts",
+    "export:admins": "tsx seed/export-admin-credentials.ts",
     "test": "vitest run"
   },
   "dependencies": {
