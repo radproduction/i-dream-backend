@@ -1,4 +1,4 @@
-import { COOKIE_NAME } from "@shared/const";
+﻿import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
@@ -70,7 +70,7 @@ export const appRouter = router({
 
           if (setupRequired && twoFactorSecret) {
             const label = fullUser.email || fullUser.employeeId || "admin";
-            const otpauth = authenticator.keyuri(label, "RadFlow HRMS", twoFactorSecret);
+            const otpauth = authenticator.keyuri(label, "IDream Entertainment HRMS", twoFactorSecret);
             qrCodeDataUrl = await toDataURL(otpauth);
           }
 
@@ -1536,3 +1536,4 @@ export const appRouter = router({
   }),
 });
 export type AppRouter = typeof appRouter;
+

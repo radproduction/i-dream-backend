@@ -1,4 +1,4 @@
-export type ManusUserSeed = {
+﻿export type ManusUserSeed = {
   openId: string;
   name: string;
   email: string;
@@ -68,7 +68,7 @@ export const manusUsers: ManusUserSeed[] = [
 
 export const manusProjects: ManusProjectSeed[] = [
   {
-    name: "Rad.flow HRMS Development",
+    name: "IDream Entertainment HRMS Development",
     description:
       "Complete HRMS portal with time tracking, leave management, and project management",
     status: "active",
@@ -96,12 +96,12 @@ export const manusProjects: ManusProjectSeed[] = [
 
 export const manusProjectAssignments: ManusProjectAssignmentSeed[] = [
   {
-    projectName: "Rad.flow HRMS Development",
+    projectName: "IDream Entertainment HRMS Development",
     userOpenId: "hrms-hassan",
     role: "Lead Developer",
   },
   {
-    projectName: "Rad.flow HRMS Development",
+    projectName: "IDream Entertainment HRMS Development",
     userOpenId: "hrms-talha",
     role: "Frontend Developer",
   },
@@ -126,3 +126,4 @@ export const manusProjectAssignments: ManusProjectAssignmentSeed[] = [
     role: "Mobile Developer",
   },
 ];
+
